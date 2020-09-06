@@ -18,7 +18,7 @@ namespace NUnitTestHttpClient
         EmployeeApiClientService employeeApiClientService;
         Mock<HttpMessageHandler> httpMessageHandlerMock;
 
-        //environment specific variables should always be set in a seperate config file or database. 
+        //environment specific variables should always be set in a separate config file or database. 
         //For the sake of this example I'm initialising them here.
         string testDatabase = "SloughDB";
         string environment = "TEST";

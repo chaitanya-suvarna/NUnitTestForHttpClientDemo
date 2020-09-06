@@ -14,7 +14,7 @@ namespace EmployeeApiClient
             employeeHttpClient = httpClient;
         }
 
-        //environment specific variables should always be set in a seperate config file or database. 
+        //environment specific variables should always be set in a separate config file or database. 
         //For the sake of this example I'm initialising them here.
         public static string testDatabase = "SloughDB";
         public static string environment = "TEST";
@@ -33,7 +33,7 @@ namespace EmployeeApiClient
                 employeeHttpClient.DefaultRequestHeaders.Add("test-db", testDatabase);
             }
 
-            HttpResponseMessage response = await employeeHttpClient.GetAsync("http://dummy.restapiexample.com/api/v1/employee/1");
+            HttpResponseMessage response = await employeeHttpClient.GetAsync($"http://dummy.restapiexample.com/api/v1/employee/{employeeId}");
             if (response.IsSuccessStatusCode)
             {
                 employee = JsonConvert.DeserializeObject<Employee>(await response.Content.ReadAsStringAsync());
