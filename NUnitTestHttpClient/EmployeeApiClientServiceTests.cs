@@ -1,7 +1,13 @@
 ﻿using EmployeeApiClient;
+using Moq;
+using Moq.Protected;
+using Newtonsoft.Json;
 using NUnit.Framework;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NUnitTestHttpClient
@@ -10,8 +16,7 @@ namespace NUnitTestHttpClient
     class EmployeeApiClientServiceTests
     {
         EmployeeApiClientService employeeApiClientService;
-        HttpMessageHandlerStub handlerStub;
-        HttpClient httpClient;
+        Mock<HttpMessageHandler> httpMessageHandlerMock;
 
         //environment specific variables should always be set in a seperate config file or database. 
         //For the sake of this example I'm initialising them here.
@@ -21,8 +26,8 @@ namespace NUnitTestHttpClient
         [SetUp]
         public void setUp()
         {
-            handlerStub = new HttpMessageHandlerStub();
-            httpClient = new HttpClient(handlerStub);
+            httpMessageHandlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+            HttpClient httpClient = new HttpClient(httpMessageHandlerMock.Object);
             employeeApiClientService = new EmployeeApiClientService(httpClient);
         }
 
@@ -32,27 +37,39 @@ namespace NUnitTestHttpClient
         {
             //Arrange
             int employeeId = 1;
-            string route = $"http://dummy.restapiexample.com/api/v1/employee/{employeeId}";
+            string targetUri = $"http://dummy.restapiexample.com/api/v1/employee/{employeeId}";
+            //Setup sendAsync method for HttpMessage Handler Mock
+            httpMessageHandlerMock.Protected().Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>()
+                )
+                .ReturnsAsync(new HttpResponseMessage()
+                {
+                    StatusCode = HttpStatusCode.OK,
+                    Content = new StringContent(JsonConvert.SerializeObject(new Employee()), Encoding.UTF8, "application/json")
+                })
+                .Verifiable();
 
             //Act
             var employee = await employeeApiClientService.GetEmployeeAsync(employeeId);
 
             //Assert
             Assert.IsInstanceOf<Employee>(employee);
-            Assert.AreEqual(handlerStub.httpRequestMessage.RequestUri, route);
-            Assert.AreEqual(handlerStub.httpRequestMessage.Headers.GetValues("Accept").FirstOrDefault(), "application/json");
-            Assert.IsNotNull(handlerStub.httpRequestMessage.Headers.GetValues("tracking-id").FirstOrDefault());
-
-            //conditional check for test-db header
-            if(environment.Equals("TEST"))
-            {
-                Assert.AreEqual(handlerStub.httpRequestMessage.Headers.GetValues("test-db").FirstOrDefault(),testDatabase);
-            }
-            else
-            {
-                Assert.IsNull(handlerStub.httpRequestMessage.Headers.GetValues("test-db").FirstOrDefault());
-            }
             
+            httpMessageHandlerMock.Protected().Verify(
+                "SendAsync",
+                Times.Exactly(1), // verify number of times SendAsync is called
+                ItExpr.Is<HttpRequestMessage>(req =>
+                req.Method == HttpMethod.Get  // verify the HttpMethod for request is GET
+                && req.RequestUri.ToString() == targetUri // veryfy the RequestUri is as expected
+                && req.Headers.GetValues("Accept").FirstOrDefault() == "application/json" //Verify Accept header
+                && req.Headers.GetValues("tracking-id").FirstOrDefault() != null //Verify tracking-id header is added
+                && environment.Equals("TEST") ? req.Headers.GetValues("test-db").FirstOrDefault() == testDatabase : //Verify test-db header is added only for TEST environment
+                                                req.Headers.GetValues("test-db").FirstOrDefault() == null 
+                ),
+                ItExpr.IsAny<CancellationToken>()
+                );
         }
     }
 }
